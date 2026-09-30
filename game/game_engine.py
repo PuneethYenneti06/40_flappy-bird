@@ -18,11 +18,7 @@ class GameEngine:
         self.width = width
         self.height = height
 
-        self.bird = Bird(width // 4, height // 2)
-        self.pipe_speed = 4
-        self.pipe_interval = 90  # frames between pipe spawns
-        self._spawn_timer = 0
-        self.pipes = [Pipe(width + 100, height, speed=self.pipe_speed)]
+        self.pipe_interval = 90
 
         self.score = 0
         self.font = pygame.font.SysFont("Arial", 30)
@@ -32,13 +28,45 @@ class GameEngine:
         self.game_over = False
         self.waiting_for_input = True
 
+        self.reset("Medium")
+
+    def reset(self, difficulty):
+        settings = DIFFICULTIES[difficulty]
+
+        self.difficulty = difficulty
+        self.pipe_speed = settings["pipe_speed"]
+        self.pipe_gap = settings["gap"]
+
+        self.bird = Bird(self.width // 4, self.height // 2)
+        self._spawn_timer = 0
+        self.pipes = [
+            Pipe(
+                self.width + 100,
+                self.height,
+                speed=self.pipe_speed,
+                gap=self.pipe_gap
+            )
+        ]
+
+        self.score = 0
+        self.game_over = False
+        self.waiting_for_input = True
+
     def handle_event(self, event):
-        # Flap is edge-triggered (KEYDOWN / MOUSEBUTTONDOWN), not held.
+        # Handle replay/quit input while game is over.
         if self.game_over:
-            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-                self.waiting_for_input = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    self.reset("Easy")
+                elif event.key == pygame.K_2:
+                    self.reset("Medium")
+                elif event.key == pygame.K_3:
+                    self.reset("Hard")
+                elif event.key == pygame.K_ESCAPE:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
             return
 
+        # Flap is edge-triggered (KEYDOWN / MOUSEBUTTONDOWN), not held.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
             self.bird.flap()
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -62,7 +90,14 @@ class GameEngine:
         self._spawn_timer += 1
         if self._spawn_timer >= self.pipe_interval:
             self._spawn_timer = 0
-            self.pipes.append(Pipe(self.width, self.height, speed=self.pipe_speed))
+            self.pipes.append(
+                Pipe(
+                    self.width,
+                    self.height,
+                    speed=self.pipe_speed,
+                    gap=self.pipe_gap
+                )
+            )
 
         for pipe in self.pipes:
             pipe.move()
@@ -82,6 +117,13 @@ class GameEngine:
         score_text = self.font.render(f"Score: {self.score}", True, WHITE)
         screen.blit(score_text, (10, 10))
 
+        difficulty_text = self.font.render(
+            f"Difficulty: {self.difficulty}",
+            True,
+            WHITE
+        )
+        screen.blit(difficulty_text, (10, 45))
+
         if self.game_over:
             overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 160))
@@ -92,7 +134,9 @@ class GameEngine:
                 f"Final Score: {self.score}", True, WHITE
             )
             hint = self.game_over_hint_font.render(
-                "Press any key or click to continue", True, WHITE
+                "1 - Easy    2 - Medium    3 - Hard    Esc - Quit",
+                True,
+                WHITE
             )
 
             screen.blit(

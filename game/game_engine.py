@@ -1,4 +1,5 @@
 import pygame
+from array import array
 from .bird import Bird
 from .pipe import Pipe
 
@@ -27,8 +28,102 @@ class GameEngine:
         self.game_over_hint_font = pygame.font.SysFont("Arial", 25)
         self.game_over = False
         self.waiting_for_input = True
+        self.flap_sound = None
+        self.score_sound = None
+        self.death_sound = None
+        self._init_sounds()
 
         self.reset("Medium")
+
+    def _make_tone(self, frequency, duration, volume=0.25):
+        mixer_info = pygame.mixer.get_init()
+        if mixer_info is None:
+            return None
+
+        sample_rate, mixer_format, channels = mixer_info
+
+        if abs(mixer_format) != 16:
+            return None
+
+        sample_count = int(sample_rate * duration)
+        samples = array("h")
+        amplitude = int(32767 * volume)
+
+        import math
+
+        for i in range(sample_count):
+            value = int(
+                amplitude * math.sin(
+                    2 * math.pi * frequency * i / sample_rate
+                )
+            )
+            for _ in range(channels):
+                samples.append(value)
+
+        return pygame.mixer.Sound(buffer=samples.tobytes())
+
+    def _init_sounds(self):
+        try:
+            if pygame.mixer.get_init() is None:
+                pygame.mixer.init()
+
+            mixer_info = pygame.mixer.get_init()
+            if mixer_info is None:
+                return
+
+            sample_rate, mixer_format, channels = mixer_info
+
+            if abs(mixer_format) != 16:
+                return
+
+            def make_sequence(notes):
+                samples = array("h")
+                amplitude = int(32767 * 0.25)
+
+                import math
+
+                for frequency, duration in notes:
+                    sample_count = int(sample_rate * duration)
+
+                    for i in range(sample_count):
+                        value = int(
+                            amplitude * math.sin(
+                                2 * math.pi * frequency * i / sample_rate
+                            )
+                        )
+
+                        for _ in range(channels):
+                            samples.append(value)
+
+                return pygame.mixer.Sound(buffer=samples.tobytes())
+
+            self.flap_sound = make_sequence([
+                (900, 0.06)
+            ])
+
+            self.score_sound = make_sequence([
+                (900, 0.07),
+                (1200, 0.09)
+            ])
+
+            self.death_sound = make_sequence([
+                (500, 0.12),
+                (250, 0.18)
+            ])
+
+        except Exception:
+            self.flap_sound = None
+            self.score_sound = None
+            self.death_sound = None
+
+    def _set_game_over(self):
+        if self.game_over:
+            return
+
+        self.game_over = True
+
+        if self.death_sound:
+            self.death_sound.play()
 
     def reset(self, difficulty):
         settings = DIFFICULTIES[difficulty]
@@ -69,8 +164,13 @@ class GameEngine:
         # Flap is edge-triggered (KEYDOWN / MOUSEBUTTONDOWN), not held.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
             self.bird.flap()
+            if self.flap_sound:
+                self.flap_sound.play()
+
         if event.type == pygame.MOUSEBUTTONDOWN:
             self.bird.flap()
+            if self.flap_sound:
+                self.flap_sound.play()
 
     def handle_input(self):
         # Reserved for continuously-held-key input; flapping is handled
@@ -84,7 +184,7 @@ class GameEngine:
         self.bird.update()
 
         if self.bird.y - self.bird.radius <= 0 or self.bird.y + self.bird.radius >= self.height:
-            self.game_over = True
+            self._set_game_over()
             return
 
         self._spawn_timer += 1
@@ -105,7 +205,14 @@ class GameEngine:
             bird_rect = self.bird.rect()
             if bird_rect.colliderect(pipe.top_rect()) or \
                bird_rect.colliderect(pipe.bottom_rect()):
-                self.game_over = True
+                self._set_game_over()
+                return
+
+            if not pipe.scored and pipe.x + pipe.width < self.bird.x:
+                pipe.scored = True
+                self.score += 1
+                if self.score_sound:
+                    self.score_sound.play()
 
     def render(self, screen):
         for pipe in self.pipes:

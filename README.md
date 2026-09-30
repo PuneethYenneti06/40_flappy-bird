@@ -4,6 +4,10 @@ This project is a terminal-based Flappy Bird clone using **Pygame**. It introduc
 
 ---
 
+### LLM Used 
+
+__ChatGPT__ - Link :- https://chatgpt.com/share/6abd0d04-9afc-83ee-9c98-956e3ac03ebc
+
 ## What’s Provided
 
 A partially working version of a Flappy Bird game with:
